@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Slope Dungeon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efe6d2; --panel:#fff8e8; --ink:#241b38; --muted:#6a5d86; --edge:#241b38;
+  --accent:#6b3fc9; --good:#23804a; --bad:#c0303a; --gold:#a8740c; --btn:#ffcf3f; --btn-ink:#241b38;
+  --stage:#0b0912;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151022; --panel:#221a36; --ink:#f1eaff; --muted:#ab9fd0; --edge:#05030a;
+    --accent:#b08cff; --good:#5fd38a; --bad:#ff6b74; --gold:#ffcf3f; --btn:#ffcf3f; --btn-ink:#1a1328;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151022; --panel:#221a36; --ink:#f1eaff; --muted:#ab9fd0; --edge:#05030a;
+  --accent:#b08cff; --good:#5fd38a; --bad:#ff6b74; --gold:#ffcf3f; --btn:#ffcf3f; --btn-ink:#1a1328;
+  color-scheme: dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*,*::before,*::after{box-sizing:inherit;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"VT323", ui-monospace, "Courier New", monospace; font-size:22px; line-height:1.2;
+  -webkit-tap-highlight-color:transparent;
+}
+.pixfont{font-family:"Press Start 2P", ui-monospace, "Courier New", monospace;}
+main{max-width:600px; margin:0 auto; padding:12px 12px 24px; display:flex; flex-direction:column; align-items:center; gap:10px;}
+h1{font-family:"Press Start 2P", ui-monospace, monospace; font-size:clamp(16px,4.6vw,24px); margin:6px 0 0; letter-spacing:1px; color:var(--ink); text-shadow:3px 3px 0 var(--accent);}
+#hud{
+  width:100%; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px;
+  background:var(--panel); border:3px solid var(--edge); box-shadow:4px 4px 0 var(--edge); padding:8px 10px;
+  font-family:"Press Start 2P", ui-monospace, monospace; font-size:11px;
+}
+#hud .grp{display:flex; align-items:center; gap:4px;}
+img.pix{image-rendering:pixelated; width:20px; height:20px; display:inline-block; vertical-align:middle;}
+#stage{position:relative; width:min(100%, 520px, 58vh); width:min(100%, 520px, 58svh); aspect-ratio:1; background:var(--stage); border:4px solid var(--edge); box-shadow:5px 5px 0 var(--edge);}
+#game{width:100%; height:100%; display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
+#toast{position:absolute; left:50%; top:10px; transform:translateX(-50%); background:rgba(11,9,18,.88); color:#fff3c4; border:2px solid #ffcf3f; padding:8px 10px; font-family:"Press Start 2P", ui-monospace, monospace; font-size:10px; line-height:1.5; text-align:center; max-width:90%; pointer-events:none; opacity:0; transition:opacity .25s;}
+#toast.show{opacity:1;}
+#pad{display:grid; grid-template-columns:repeat(3,54px); grid-template-rows:repeat(3,54px); gap:4px; touch-action:none; user-select:none;}
+#pad button{font-size:20px; padding:0;}
+#pad .blank{visibility:hidden;}
+.help{color:var(--muted); text-align:center; max-width:46ch; margin:0;}
+.btn{
+  font-family:"Press Start 2P", ui-monospace, monospace; font-size:11px; line-height:1.3;
+  background:var(--btn); color:var(--btn-ink); border:3px solid var(--edge); box-shadow:3px 3px 0 var(--edge);
+  padding:11px 13px; cursor:pointer; border-radius:0;
+}
+.btn:active{transform:translate(3px,3px); box-shadow:none;}
+.btn:focus-visible, input:focus-visible{outline:3px dashed var(--accent); outline-offset:3px;}
+.btn.alt{background:var(--panel); color:var(--ink);}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none; box-shadow:3px 3px 0 var(--edge);}
+.overlay{
+  position:fixed; inset:0; z-index:30; display:flex; background:rgba(8,5,16,.74); overflow-y:auto;
+  padding:calc(14px + env(safe-area-inset-top,0px)) 14px calc(14px + env(safe-area-inset-bottom,0px));
+}
+.overlay.hidden{display:none;}
+.card{margin:auto; width:100%; max-width:470px; background:var(--panel); color:var(--ink); border:4px solid var(--edge); box-shadow:6px 6px 0 var(--edge); padding:16px 18px;}
+.card h2{font-family:"Press Start 2P", ui-monospace, monospace; font-size:15px; line-height:1.5; margin:0 0 10px;}
+.card p{margin:6px 0;}
+.row{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px;}
+#graph{display:block; width:100%; max-width:300px; aspect-ratio:1; margin:8px auto; border:3px solid var(--edge);}
+#answer{font-family:"VT323", ui-monospace, monospace; font-size:28px; width:9ch; flex:1 1 7ch; min-width:6ch; padding:4px 8px; border:3px solid var(--edge); background:var(--bg); color:var(--ink); border-radius:0;}
+#feedback{margin-top:10px;}
+#feedback .good{color:var(--good);}
+#feedback .bad{color:var(--bad);}
+.rise{color:var(--gold);} .run{color:var(--good);}
+.note{color:var(--muted);}
+.tag{display:inline-block; font-family:"Press Start 2P", ui-monospace, monospace; font-size:9px; padding:5px 6px; border:2px solid var(--edge); background:var(--accent); color:#fff; margin-bottom:8px;}
+.title-art{display:flex; justify-content:center; gap:10px; margin:6px 0 12px;}
+.title-art img{width:40px; height:40px; image-rendering:pixelated;}
+.legend{display:grid; grid-template-columns:28px 1fr; gap:6px 8px; align-items:center; margin:8px 0;}
+.legend img{width:24px; height:24px; image-rendering:pixelated;}
+label.toggle{display:flex; gap:8px; align-items:center; cursor:pointer; margin-top:8px;}
+label.toggle input{width:20px; height:20px; accent-color:var(--accent);}
+.stats{font-size:24px;}
+@media (prefers-reduced-motion: reduce){ #toast{transition:none;} }
+</style>
+</head>
+<body>
+<main>
+  <h1>Slope Dungeon</h1>
+  <div id="hud" aria-live="polite">
+    <div class="grp">LV <span id="lv">1</span></div>
+    <div class="grp" id="hearts" aria-label="Hearts"></div>
+    <div class="grp" id="items"></div>
+    <div class="grp">PTS <span id="score">0</span></div>
+  </div>
+  <div id="stage">
+    <canvas id="game" width="240" height="240" aria-label="Maze. Use arrow keys or WASD to move."></canvas>
+    <div id="toast"></div>
+  </div>
+  <div id="pad" aria-label="Movement controls">
+    <button class="btn blank" tabindex="-1" aria-hidden="true"></button>
+    <button class="btn" data-dir="up" aria-label="Move up">▲</button>
+    <button class="btn blank" tabindex="-1" aria-hidden="true"></button>
+    <button class="btn" data-dir="left" aria-label="Move left">◀</button>
+    <button class="btn blank" tabindex="-1" aria-hidden="true"></button>
+    <button class="btn" data-dir="right" aria-label="Move right">▶</button>
+    <button class="btn blank" tabindex="-1" aria-hidden="true"></button>
+    <button class="btn" data-dir="down" aria-label="Move down">▼</button>
+    <button class="btn blank" tabindex="-1" aria-hidden="true"></button>
+  </div>
+  <p class="help">Arrow keys or WASD to move. Bump a slime to fight it with slope. Open chests for harder bonus questions and power-ups. Reach the portal to escape.</p>
+</main>
+
+<!-- Title screen -->
+<div class="overlay" id="titleScreen">
+  <div class="card">
+    <div class="title-art" id="titleArt"></div>
+    <h2>Escape the Slope Dungeon</h2>
+    <p>Find your way through three dark mazes to the glowing portal.</p>
+    <div class="legend" id="legend"></div>
+    <p>Answer like <b>3/4</b>, <b>-2</b>, <b>0</b>, or <b>undefined</b>. Fractions must be in simplest form.</p>
+    <p>Points on the graph aren’t marked. Find spots where the line crosses exact grid corners, or tap <b>Show points</b> if you’re stuck.</p>
+    <p class="note" id="bestLine"></p>
+    <div class="row"><button class="btn" id="startBtn">Enter the dungeon</button></div>
+  </div>
+</div>
+
+<!-- Question modal -->
+<div class="overlay hidden" id="qModal" role="dialog" aria-modal="true" aria-labelledby="qTitle">
+  <div class="card">
+    <span class="tag" id="qTag">Slime</span>
+    <h2 id="qTitle">A slime blocks the path!</h2>
+    <p id="qPrompt"></p>
+    <canvas id="graph" width="300" height="300" aria-label="Coordinate graph with a line"></canvas>
+    <div id="answerRow">
+      <div class="row">
+        <input id="answer" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="slope" aria-label="Your slope answer">
+        <button class="btn" id="submitBtn">Check</button>
+      </div>
+      <div class="row">
+        <button class="btn alt" id="undefBtn">Undefined</button>
+        <button class="btn alt" id="ptsBtn">Show points</button>
+        <button class="btn alt" id="hintBtn">Hint</button>
+      </div>
+    </div>
+    <div id="feedback" aria-live="polite"></div>
+    <div class="row" id="contRow" hidden><button class="btn" id="contBtn">Continue</button></div>
+  </div>
+</div>
+
+<!-- Level / end screens -->
+<div class="overlay hidden" id="msgScreen">
+  <div class="card">
+    <h2 id="msgTitle"></h2>
+    <div id="msgBody" class="stats"></div>
+    <div class="row" id="msgBtns"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; };
+const fmt = n => (n < 0 ? '−' + (-n) : String(n));
+function fracStr(n, d) {
+  if (d < 0) { n = -n; d = -d; }
+  const g = gcd(n, d); n /= g; d /= g;
+  return d === 1 ? fmt(n) : fmt(n) + '/' + d;
+}
+
+/* ---------- Pixel sprites (8x8, drawn at 2px per pixel) ---------- */
+const TILE = 16;
+function sprite(rows, pal) {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+  const x = c.getContext('2d');
+  rows.forEach((r, j) => [...r].forEach((ch, i) => {
+    if (ch === '.') return;
+    x.fillStyle = pal[ch]; x.fillRect(i * 2, j * 2, 2, 2);
+  }));
+  return c;
+}
+const SPR = {
+  player: sprite(['..hhhh..', '.hhhhhh.', '.sesses.', '.ssssss.', '..bbbb..', '.sbbbbs.', '..pppp..', '..k..k..'],
+    { h:'#7a3b1e', s:'#f2c39b', e:'#1b1726', b:'#3f7fe0', p:'#2c3b6e', k:'#1b1726' }),
+  slime: sprite(['........', '..gggg..', '.gllggg.', 'gwkggwkg', 'gggggggg', 'gggddggg', '.gggggg.', '..dddd..'],
+    { g:'#4fc263', l:'#b6f5aa', w:'#ffffff', k:'#132018', d:'#2b7a3b' }),
+  chest: sprite(['........', '.dddddd.', 'dwwwwwwd', 'dyyyyyyd', 'dwwyywwd', 'dwwwwwwd', 'dddddddd', '........'],
+    { d:'#4a2a14', w:'#9a5a2a', y:'#ffcf3f' }),
+  portal: sprite(['..pppp..', '.pPPPPp.', 'pPccccPp', 'pPcwwcPp', 'pPcwwcPp', 'pPccccPp', '.pPPPPp.', '..pppp..'],
+    { p:'#5a1f8a', P:'#b45cff', c:'#e4b3ff', w:'#ffffff' }),
+  heart: sprite(['.rr.rr..', 'rrrrrrr.', 'rwrrrrr.', 'rrrrrrr.', '.rrrrr..', '..rrr...', '...r....', '........'],
+    { r:'#e8384f', w:'#ffd0d6' }),
+  scroll: sprite(['........', '.tttttt.', 'tpppppp.', '.pkkkp..', '.pppppp.', '.pkkkkp.', '.pppppp.', '.tttttt.'],
+    { t:'#8a5a2b', p:'#f1deb0', k:'#6b5236' }),
+  torch: sprite(['...o....', '..oyo...', '..oyo...', '...o....', '...w....', '...w....', '...w....', '...w....'],
+    { o:'#ff7a1a', y:'#ffe14a', w:'#8a5a2b' }),
+  star: sprite(['...y....', '...y....', 'yyyyyyy.', '.yyyyy..', '..yyy...', '.yy.yy..', '.y...y..', '........'],
+    { y:'#ffd23f' })
+};
+const ICON = {}; for (const k in SPR) ICON[k] = SPR[k].toDataURL();
+const img = (k, alt) => `<img class="pix" src="${ICON[k]}" alt="${alt || ''}">`;
+
+function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function makeFloor(seed) {
+  const r = mulberry(seed);
+  const c = document.createElement('canvas'); c.width = c.height = 16; const x = c.getContext('2d');
+  x.fillStyle = '#5e5873'; x.fillRect(0, 0, 16, 16);
+  for (let i = 0; i < 9; i++) { x.fillStyle = r() < .5 ? '#69637f' : '#534e68'; x.fillRect(Math.floor(r() * 8) * 2, Math.floor(r() * 8) * 2, 2, 2); }
+  x.fillStyle = '#4e4962'; x.fillRect(0, 15, 16, 1); x.fillRect(15, 0, 1, 16);
+  return c;
+}
+function makeWall() {
+  const c = document.createElement('canvas'); c.width = c.height = 16; const x = c.getContext('2d');
+  x.fillStyle = '#1d182c'; x.fillRect(0, 0, 16, 16);
+  for (let row = 0; row < 4; row++) {
+    const y = row * 4;
+    x.fillStyle = '#3a3256'; x.fillRect(0, y, 16, 3);
+    x.fillStyle = '#4c4373'; x.fillRect(0, y, 16, 1);
+    x.fillStyle = '#1d182c';
+    if (row % 2 === 0) x.fillRect(7, y, 1, 3); else { x.fillRect(3, y, 1, 3); x.fillRect(11, y, 1, 3); }
+  }
+  return c;
+}
+const FLOORS = [makeFloor(11), makeFloor(29), makeFloor(47), makeFloor(83)];
+const WALL = makeWall();
+
+/* ---------- Game state ---------- */
+const LEVELS = [
+  { cells: 7,  slimes: 4, chests: 2, name: 'Positive slopes' },
+  { cells: 9,  slimes: 5, chests: 3, name: 'Positive and negative slopes' },
+  { cells: 11, slimes: 6, chests: 3, name: 'Zero and undefined slopes join in' }
+];
+const S = { level: 1, hearts: 3, maxHearts: 5, score: 0, levelStartScore: 0, hints: 1, torch: false, mult: 0,
+  correct: 0, attempts: 0, busy: true, perp: true };
+let grid = [[1]], W = 1, H = 1, explored = [[false]], ents = new Map(), P = { x: 1, y: 1, rx: 1, ry: 1, face: 1 };
+let particles = [];
+const canvas = $('game'), ctx = canvas.getContext('2d');
+const key = (x, y) => x + ',' + y;
+
+function genMaze(cw, ch) {
+  const GW = cw * 2 + 1, GH = ch * 2 + 1;
+  const g = Array.from({ length: GH }, () => Array(GW).fill(1));
+  const vis = Array.from({ length: ch }, () => Array(cw).fill(false));
+  const stack = [[0, 0]]; vis[0][0] = true; g[1][1] = 0;
+  while (stack.length) {
+    const [cx, cy] = stack[stack.length - 1];
+    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      .map(([dx, dy]) => [cx + dx, cy + dy, dx, dy])
+      .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < cw && ny < ch && !vis[ny][nx]);
+    if (!nb.length) { stack.pop(); continue; }
+    const [nx, ny, dx, dy] = pick(nb);
+    vis[ny][nx] = true;
+    g[cy * 2 + 1 + dy][cx * 2 + 1 + dx] = 0;
+    g[ny * 2 + 1][nx * 2 + 1] = 0;
+    stack.push([nx, ny]);
+  }
+  return g;
+}
+function bfs(g, sx, sy) {
+  const dist = g.map(r => r.map(() => -1)), prev = g.map(r => r.map(() => null));
+  const q = [[sx, sy]]; dist[sy][sx] = 0;
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (g[ny] && g[ny][nx] === 0 && dist[ny][nx] < 0) { dist[ny][nx] = dist[y][x] + 1; prev[ny][nx] = [x, y]; q.push([nx, ny]); }
+    }
+  }
+  return { dist, prev };
+}
+
+function startLevel(n) {
+  S.level = n; S.levelStartScore = S.score; S.torch = false;
+  S.hearts = Math.max(S.hearts, 3);
+  const L = LEVELS[n - 1];
+  grid = genMaze(L.cells, L.cells); H = grid.length; W = grid[0].length;
+  const { dist, prev } = bfs(grid, 1, 1);
+  let ex = 1, ey = 1;
+  for (let y = 1; y < H; y += 2) for (let x = 1; x < W; x += 2) if (dist[y][x] > dist[ey][ex]) { ex = x; ey = y; }
+  const path = []; let cur = [ex, ey];
+  while (cur) { path.unshift(cur); cur = prev[cur[1]][cur[0]]; }
+  const onPath = new Set(path.map(([x, y]) => key(x, y)));
+  ents = new Map();
+  ents.set(key(ex, ey), { type: 'exit', x: ex, y: ey });
+  let cand = path.slice(3, -2).filter(([x, y]) => x % 2 === 0 || y % 2 === 0);
+  if (cand.length < L.slimes) cand = path.slice(3, -2);
+  const nS = Math.min(L.slimes, cand.length);
+  for (let i = 0; i < nS; i++) {
+    const [x, y] = cand[Math.floor((i + 1) * cand.length / (nS + 1))];
+    ents.set(key(x, y), { type: 'slime', x, y });
+  }
+  const deadEnds = [];
+  for (let y = 1; y < H; y += 2) for (let x = 1; x < W; x += 2) {
+    if ((x === 1 && y === 1) || onPath.has(key(x, y))) continue;
+    let open = 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid[y + dy][x + dx] === 0) open++;
+    if (open === 1) deadEnds.push([x, y]);
+  }
+  deadEnds.sort(() => Math.random() - .5);
+  deadEnds.slice(0, L.chests).forEach(([x, y]) => ents.set(key(x, y), { type: 'chest', x, y }));
+  P = { x: 1, y: 1, rx: 1, ry: 1, face: 1 };
+  explored = grid.map(r => r.map(() => false));
+  particles = [];
+  reveal();
+  canvas.width = W * TILE; canvas.height = H * TILE; ctx.imageSmoothingEnabled = false;
+  updateHUD();
+}
+const radius = () => (S.torch ? 5 : 3);
+function reveal() {
+  const r = radius() + .5;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    if (Math.hypot(x - P.x, y - P.y) <= r) explored[y][x] = true;
+}
+
+function updateHUD() {
+  $('lv').textContent = S.level;
+  $('score').textContent = S.score;
+  $('hearts').innerHTML = Array.from({ length: S.hearts }, () => img('heart', 'heart')).join('') || '0';
+  let it = img('scroll', 'hints') + '×' + S.hints;
+  if (S.torch) it += ' ' + img('torch', 'torch active');
+  if (S.mult > 0) it += ' ' + img('star', 'double points') + '×' + S.mult;
+  $('items').innerHTML = it;
+}
+let toastTimer;
+function toast(msg, ms = 2400) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* ---------- Movement ---------- */
+let lastMove = 0;
+function tryMove(dx, dy) {
+  if (S.busy) return;
+  const now = performance.now(); if (now - lastMove < 110) return; lastMove = now;
+  if (dx) P.face = dx;
+  const nx = P.x + dx, ny = P.y + dy;
+  if (!grid[ny] || grid[ny][nx] !== 0) return;
+  const e = ents.get(key(nx, ny));
+  if (e && (e.type === 'slime' || e.type === 'chest')) { openQuestion(e); return; }
+  P.x = nx; P.y = ny; reveal();
+  if (e && e.type === 'exit') levelComplete();
+}
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+document.addEventListener('keydown', ev => {
+  if (ev.target && ev.target.tagName === 'INPUT') return;
+  const k = ev.key.toLowerCase();
+  const map = { arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right' };
+  if (map[k] && !S.busy) { ev.preventDefault(); tryMove(...DIRS[map[k]]); }
+});
+document.querySelectorAll('#pad button[data-dir]').forEach(b => {
+  let iv;
+  const stop = () => clearInterval(iv);
+  b.addEventListener('pointerdown', ev => {
+    ev.preventDefault(); lastMove = 0; tryMove(...DIRS[b.dataset.dir]);
+    stop(); iv = setInterval(() => tryMove(...DIRS[b.dataset.dir]), 150);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, stop));
+});
+
+/* ---------- Problems ---------- */
+function build(p1, p2, xStep, yStep, opts) {
+  let [x1, y1] = p1, [x2, y2] = p2;
+  if (x2 < x1 || (x2 === x1 && y2 < y1)) { [x1, y1, x2, y2] = [x2, y2, x1, y1]; }
+  const rise = y2 - y1, run = x2 - x1;
+  let ans;
+  if (run === 0) ans = { undef: true };
+  else ans = { n: rise, d: run };
+  return Object.assign({ p1: [x1, y1], p2: [x2, y2], xStep, yStep, ans }, opts);
+}
+function place(rise, run, xStep, yStep, opts) {
+  const lim = 5;
+  for (let t = 0; t < 300; t++) {
+    const x1 = rand(-lim, lim), y1 = rand(-lim, lim), dir = Math.random() < .5 ? 1 : -1;
+    const x2 = x1 + dir * run, y2 = y1 + dir * rise;
+    if (Math.abs(x2) <= lim && Math.abs(y2) <= lim && (x1 !== x2 || y1 !== y2))
+      return build([x1 * xStep, y1 * yStep], [x2 * xStep, y2 * yStep], xStep, yStep, opts);
+  }
+  return build([0, 0], [run * xStep, rise * yStep], xStep, yStep, opts);
+}
+function makeNormal(level) {
+  const r = Math.random(); let type = 'normal';
+  if (level >= 3) { if (r < .17) type = 'horiz'; else if (r < .34) type = 'vert'; }
+  else if (level === 2 && r < .12) type = 'horiz';
+  let rise, run;
+  if (type === 'horiz') { rise = 0; run = rand(2, 6); }
+  else if (type === 'vert') { run = 0; rise = rand(2, 6); }
+  else { run = rand(1, 5); rise = rand(1, 5); if (level >= 2 && Math.random() < .55) rise = -rise; }
+  return place(rise, run, 1, 1, { prompt: 'Find the slope of the line. Look for two places where it crosses exact grid corners.' });
+}
+function makeHard(level) {
+  const kind = pick(['scaled', 'sparse']);
+  const sign = () => (level >= 2 || kind !== 'scaled') && Math.random() < .5 ? -1 : 1;
+  let rise, run;
+  if (kind === 'scaled') {
+    const [xs, ys] = pick([[1, 2], [1, 5], [2, 1], [1, 3]]);
+    do { run = rand(1, 4); rise = rand(1, 5); } while (gcd(rise, run) !== 1);
+    return place(sign() * rise, run, xs, ys, { scaled: true,
+      prompt: 'Check the scale on each axis! Find the slope of the line.' });
+  }
+  do { run = rand(3, 5); rise = rand(1, 5); } while (gcd(rise, run) !== 1 || rise === run);
+  return place(sign() * rise, run, 1, 1, {
+    prompt: 'This line only crosses grid corners every few squares. Find two of those corners, then find the slope.' });
+}
+
+function parseAnswer(str) {
+  const s = str.trim().toLowerCase().replace(/\s+/g, '').replace(/[−–—]/g, '-');
+  if (!s) return null;
+  if (/^(undefined|undef|und|none|noslope|dne)$/.test(s)) return { undef: true };
+  let m = s.match(/^([+-]?)(\d+)\/([+-]?)(\d+)$/);
+  if (m) {
+    const n = +m[2], d = +m[4];
+    if (d === 0) return { divZero: true };
+    const neg = (m[1] === '-') !== (m[3] === '-');
+    return { n: neg ? -n : n, d, isFrac: true, signInDen: m[3] === '-' };
+  }
+  m = s.match(/^([+-]?)(\d+)$/);
+  if (m) return { n: (m[1] === '-' ? -1 : 1) * +m[2], d: 1 };
+  if (/^[+-]?\d*\.\d+$/.test(s)) return { decimal: true, v: +s };
+  return { bad: true };
+}
+function grade(p, ans) {
+  const retry = msg => ({ status: 'retry', msg });
+  if (ans.undef) {
+    if (p.undef) return { status: 'right' };
+    if (p.divZero) return retry('You’re right that you can’t divide by 0. Type the word undefined.');
+    return { status: 'wrong' };
+  }
+  if (p.undef || p.divZero) return { status: 'wrong' };
+  const val = ans.n / ans.d;
+  if (p.decimal) {
+    return Math.abs(p.v - val) < 0.011 ? retry('That matches the slope, but write it as a fraction in simplest form (like 3/4 or -2).') : { status: 'wrong' };
+  }
+  if (p.n * ans.d !== ans.n * p.d) return { status: 'wrong' };
+  if (p.signInDen) return retry('Right value! Put the negative sign in front, like -3/4, not in the denominator.');
+  if (gcd(p.n, p.d) !== 1 || (p.isFrac && p.d === 1)) return retry('That’s equal to the slope, but it isn’t in simplest form. Simplify it and try again.');
+  return { status: 'right' };
+}
+function answerText(ans) { return ans.undef ? 'undefined' : fracStr(ans.n, ans.d); }
+
+function explanation(p) {
+  const [x1, y1] = p.p1, [x2, y2] = p.p2, rise = y2 - y1, run = x2 - x1;
+  const sub = (a, b) => `${fmt(a)} − ${b < 0 ? '(' + fmt(b) + ')' : fmt(b)}`;
+  let h = `<p>Use the points (${fmt(x1)}, ${fmt(y1)}) and (${fmt(x2)}, ${fmt(y2)}).</p>`;
+  h += `<p><b class="rise">Rise</b> = ${sub(y2, y1)} = ${fmt(rise)}<br><b class="run">Run</b> = ${sub(x2, x1)} = ${fmt(run)}</p>`;
+  if (run === 0) h += `<p>The run is 0, and you can’t divide by 0. A vertical line has an <b>undefined</b> slope.</p>`;
+  else if (rise === 0) h += `<p>Slope = 0 ÷ ${fmt(run)} = <b>0</b>. A horizontal line has a slope of 0.</p>`;
+  else {
+    const m = fracStr(rise, run);
+    h += `<p>Slope = rise ÷ run = ${fmt(rise)}/${fmt(run)} = <b>${m}</b></p>`;
+  }
+  if (p.scaled) h += `<p class="note">Each box is worth ${p.xStep} on the x-axis and ${p.yStep} on the y-axis, so counting boxes alone gives the wrong answer.</p>`;
+  return h;
+}
+
+/* ---------- Graph drawing ---------- */
+function drawGraph(p, tri, pts) {
+  const c = $('graph'), dpr = window.devicePixelRatio || 1, SZ = 300;
+  c.width = SZ * dpr; c.height = SZ * dpr;
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pad = 22, N = 6, cell = (SZ - 2 * pad) / (2 * N);
+  const X = v => pad + (v / p.xStep + N) * cell, Y = v => pad + (N - v / p.yStep) * cell;
+  g.fillStyle = '#fffdf4'; g.fillRect(0, 0, SZ, SZ);
+  g.lineWidth = 1; g.strokeStyle = '#d8d0bd';
+  for (let i = -N; i <= N; i++) {
+    const a = pad + (i + N) * cell;
+    g.beginPath(); g.moveTo(a, pad); g.lineTo(a, SZ - pad); g.stroke();
+    g.beginPath(); g.moveTo(pad, a); g.lineTo(SZ - pad, a); g.stroke();
+  }
+  g.strokeStyle = '#241b38'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(pad - 8, Y(0)); g.lineTo(SZ - pad + 8, Y(0)); g.stroke();
+  g.beginPath(); g.moveTo(X(0), pad - 8); g.lineTo(X(0), SZ - pad + 8); g.stroke();
+  g.fillStyle = '#4b3f66'; g.font = '15px VT323, ui-monospace, monospace';
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  for (let i = -N; i <= N; i++) if (i) g.fillText(fmt(i * p.xStep).replace('−', '-'), X(i * p.xStep), Y(0) + 3);
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (let i = -N; i <= N; i++) if (i) g.fillText(fmt(i * p.yStep).replace('−', '-'), X(0) - 4, Y(i * p.yStep));
+  g.font = 'bold 16px VT323, ui-monospace, monospace'; g.fillStyle = '#241b38';
+  g.textAlign = 'right'; g.fillText('x', SZ - 4, Y(0) - 9);
+  g.textAlign = 'left'; g.fillText('y', X(0) + 6, 10);
+
+  const [x1, y1] = p.p1, [x2, y2] = p.p2, rise = y2 - y1, run = x2 - x1;
+  g.save(); g.beginPath(); g.rect(pad - 6, pad - 6, SZ - 2 * pad + 12, SZ - 2 * pad + 12); g.clip();
+  g.strokeStyle = '#6b3fc9'; g.lineWidth = 3; g.beginPath();
+  if (run === 0) { g.moveTo(X(x1), 0); g.lineTo(X(x1), SZ); }
+  else {
+    const m = rise / run, xa = -(N + 1) * p.xStep, xb = (N + 1) * p.xStep;
+    g.moveTo(X(xa), Y(y1 + m * (xa - x1))); g.lineTo(X(xb), Y(y1 + m * (xb - x1)));
+  }
+  g.stroke(); g.restore();
+
+  if (tri) {
+    g.setLineDash([5, 4]); g.lineWidth = 2.5;
+    g.strokeStyle = '#23804a'; g.beginPath(); g.moveTo(X(x1), Y(y1)); g.lineTo(X(x2), Y(y1)); g.stroke();
+    g.strokeStyle = '#b07a0a'; g.beginPath(); g.moveTo(X(x2), Y(y1)); g.lineTo(X(x2), Y(y2)); g.stroke();
+    g.setLineDash([]);
+    g.font = 'bold 17px VT323, ui-monospace, monospace'; g.textBaseline = 'middle';
+    const box = (txt, x, y, col, align) => {
+      g.textAlign = align; const w = g.measureText(txt).width + 6;
+      let bx = align === 'center' ? x - w / 2 : x; bx = Math.max(2, Math.min(SZ - w - 2, bx));
+      const by = Math.max(10, Math.min(SZ - 10, y));
+      g.fillStyle = 'rgba(255,253,244,.92)'; g.fillRect(bx, by - 9, w, 18);
+      g.fillStyle = col; g.textAlign = 'left'; g.fillText(txt, bx + 3, by);
+    };
+    if (run !== 0) box('run = ' + fmt(run).replace('−', '-'), (X(x1) + X(x2)) / 2, Y(y1) + (rise > 0 ? 14 : -14), '#23804a', 'center');
+    if (rise !== 0) box('rise = ' + fmt(rise).replace('−', '-'), X(x2) + 6, (Y(y1) + Y(y2)) / 2, '#8a5c00', 'left');
+  }
+  if (tri || pts) {
+    g.font = 'bold 17px VT323, ui-monospace, monospace'; g.textBaseline = 'middle';
+    [p.p1, p.p2].forEach(([px, py], i) => {
+      g.fillStyle = '#241b38'; g.fillRect(X(px) - 6, Y(py) - 6, 12, 12);
+      g.fillStyle = '#e8384f'; g.fillRect(X(px) - 4, Y(py) - 4, 8, 8);
+      const txt = `(${px}, ${py})`, w = g.measureText(txt).width + 6;
+      let bx = i === 0 ? X(px) - w - 8 : X(px) + 8; bx = Math.max(2, Math.min(SZ - w - 2, bx));
+      const by = Math.max(10, Math.min(SZ - 10, Y(py) + (i === 0 ? 12 : -12)));
+      g.fillStyle = 'rgba(255,253,244,.92)'; g.fillRect(bx, by - 9, w, 18);
+      g.fillStyle = '#c0303a'; g.textAlign = 'left'; g.fillText(txt, bx + 3, by);
+    });
+  }
+}
+
+/* ---------- Question flow ---------- */
+let Q = null;
+function openQuestion(ent) {
+  S.busy = true;
+  const chest = ent.type === 'chest';
+  const prob = chest ? makeHard(S.level) : makeNormal(S.level);
+  Q = { ent, chest, prob, hintUsed: false, ptsUsed: false, done: false };
+  $('qTag').textContent = chest ? 'Bonus challenge' : 'Slime';
+  $('qTitle').textContent = chest ? 'A locked treasure chest!' : 'A slime blocks the path!';
+  $('qPrompt').textContent = prob.prompt + (chest ? ' Get it right to win a power-up. A wrong answer costs no heart, but the chest crumbles.' : '');
+  drawGraph(prob, false);
+  $('answer').value = '';
+  $('feedback').innerHTML = '';
+  $('answerRow').hidden = false; $('contRow').hidden = true;
+  syncHintBtn();
+  $('qModal').classList.remove('hidden');
+  setTimeout(() => $('answer').focus(), 30);
+}
+function syncHintBtn() {
+  const b = $('hintBtn');
+  b.textContent = `Hint (${S.hints})`;
+  b.disabled = S.hints <= 0 || Q.hintUsed;
+  $('ptsBtn').disabled = Q.ptsUsed || Q.hintUsed;
+}
+$('ptsBtn').addEventListener('click', () => {
+  if (!Q || Q.done || Q.ptsUsed || Q.hintUsed) return;
+  Q.ptsUsed = true; syncHintBtn();
+  drawGraph(Q.prob, false, true);
+  $('feedback').innerHTML = '<p class="note">Two points on the line are now labeled. (Points shown: you earn 75% of the points.)</p>';
+  $('answer').focus();
+});
+$('hintBtn').addEventListener('click', () => {
+  if (!Q || Q.done || S.hints <= 0 || Q.hintUsed) return;
+  S.hints--; Q.hintUsed = true; updateHUD(); syncHintBtn();
+  drawGraph(Q.prob, true);
+  const p = Q.prob; let tip = 'The dashed lines show the rise (up or down) and the run (left to right). Slope = rise ÷ run.';
+  if (p.scaled) tip += ' Use the numbers on the axes, not the number of boxes.';
+  if (p.ans.undef || (p.p1[0] === p.p2[0])) tip = 'There’s no run here at all. What happens when you divide by 0?';
+  $('feedback').innerHTML = `<p class="note">${tip} (Hint used: half points.)</p>`;
+  $('answer').focus();
+});
+$('undefBtn').addEventListener('click', () => { $('answer').value = 'undefined'; $('answer').focus(); });
+$('answer').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+$('submitBtn').addEventListener('click', submit);
+
+function submit() {
+  if (!Q || Q.done) return;
+  const parsed = parseAnswer($('answer').value);
+  if (!parsed || parsed.bad) {
+    $('feedback').innerHTML = '<p class="bad">Type a whole number like -2 or 0, a fraction like 3/4, or the word undefined.</p>'; return;
+  }
+  const res = grade(parsed, Q.prob.ans);
+  if (res.status === 'retry') { $('feedback').innerHTML = `<p class="bad">${res.msg}</p>`; $('answer').focus(); return; }
+  Q.done = true; S.attempts++;
+  const ok = res.status === 'right';
+  let html = '';
+  if (ok) {
+    S.correct++;
+    let pts = Q.chest ? 250 : 100;
+    if (Q.hintUsed) pts = Math.round(pts / 2);
+    else if (Q.ptsUsed) pts = Math.round(pts * .75);
+    if (S.mult > 0) { pts *= 2; S.mult--; }
+    S.score += pts;
+    html = `<p class="good"><b>Correct! +${pts} points.</b> The answer is ${answerText(Q.prob.ans)}.</p>`;
+    ents.delete(key(Q.ent.x, Q.ent.y));
+    burst(Q.ent.x, Q.ent.y, Q.chest ? '#ffcf3f' : '#4fc263');
+    if (Q.chest) html += grantPower();
+    else html += '<p>The slime melts away.</p>';
+  } else {
+    html = `<p class="bad"><b>Not quite.</b> The answer is ${answerText(Q.prob.ans)}.</p>` + explanation(Q.prob);
+    if (Q.chest) { ents.delete(key(Q.ent.x, Q.ent.y)); burst(Q.ent.x, Q.ent.y, '#9a5a2a'); html += '<p class="note">The chest crumbles to dust.</p>'; }
+    else { S.hearts--; html += S.hearts > 0 ? `<p>The slime hits you! You lose a heart. Bump it again for a new problem.</p>` : `<p>The slime hits you, and that was your last heart.</p>`; }
+    drawGraph(Q.prob, true);
+  }
+  $('feedback').innerHTML = html;
+  $('answerRow').hidden = true; $('contRow').hidden = false;
+  updateHUD();
+  setTimeout(() => $('contBtn').focus(), 30);
+}
+const POWERS = {
+  heart: { icon: 'heart', name: 'Extra Heart', desc: 'You gain one heart.', apply: () => { S.hearts++; } },
+  hint:  { icon: 'scroll', name: 'Hint Scrolls', desc: 'Two more hints. A hint draws the rise and run on the graph.', apply: () => { S.hints += 2; } },
+  torch: { icon: 'torch', name: 'Torch', desc: 'You can see much farther for the rest of this level.', apply: () => { S.torch = true; reveal(); } },
+  star:  { icon: 'star', name: 'Power Star', desc: 'Double points on your next 3 correct answers.', apply: () => { S.mult += 3; } }
+};
+function grantPower() {
+  const pool = ['hint', 'star'];
+  if (S.hearts < S.maxHearts) pool.push('heart', 'heart');
+  if (!S.torch) pool.push('torch', 'torch');
+  const pw = POWERS[pick(pool)]; pw.apply();
+  return `<p>${img(pw.icon)} <b>${pw.name}!</b> ${pw.desc}</p>`;
+}
+$('contBtn').addEventListener('click', () => {
+  $('qModal').classList.add('hidden'); Q = null;
+  if (S.hearts <= 0) { gameOver(); return; }
+  S.busy = false; lastMove = 0;
+});
+
+/* ---------- Screens ---------- */
+function showMsg(title, body, buttons) {
+  S.busy = true;
+  $('msgTitle').textContent = title; $('msgBody').innerHTML = body;
+  const row = $('msgBtns'); row.innerHTML = '';
+  buttons.forEach(([label, fn, alt]) => {
+    const b = document.createElement('button'); b.className = 'btn' + (alt ? ' alt' : ''); b.textContent = label;
+    b.addEventListener('click', () => { $('msgScreen').classList.add('hidden'); fn(); });
+    row.appendChild(b);
+  });
+  $('msgScreen').classList.remove('hidden');
+  setTimeout(() => row.firstChild && row.firstChild.focus(), 30);
+}
+const accuracy = () => (S.attempts ? Math.round(100 * S.correct / S.attempts) : 0);
+function statsHTML() {
+  return `<p>Score: <b>${S.score}</b></p><p>Problems correct: <b>${S.correct}</b> of ${S.attempts} (${accuracy()}%)</p>`;
+}
+function begin(level) { startLevel(level); S.busy = false; toast(`Level ${level}: ${LEVELS[level - 1].name}`); }
+function levelComplete() {
+  S.score += 150; updateHUD();
+  if (S.level < LEVELS.length) {
+    showMsg(`Level ${S.level} cleared!`, `<p>Escape bonus: +150</p>${statsHTML()}<p class="note">Next up: ${LEVELS[S.level].name.toLowerCase()}.</p>`,
+      [['Go to level ' + (S.level + 1), () => begin(S.level + 1)]]);
+  } else {
+    const best = saveBest();
+    showMsg('You escaped the dungeon!', statsHTML() + `<p>Best score on this device: <b>${best}</b></p>`,
+      [['Play again', resetGame]]);
+  }
+}
+function gameOver() {
+  saveBest();
+  showMsg('Out of hearts!', statsHTML() + '<p class="note">Every wrong answer shows the rise and run. Take another look and try again.</p>', [
+    ['Retry this level', () => { S.score = S.levelStartScore; S.hearts = 3; S.mult = 0; begin(S.level); }],
+    ['Start over', resetGame, true]
+  ]);
+}
+function resetGame() {
+  Object.assign(S, { hearts: 3, score: 0, hints: 1, mult: 0, correct: 0, attempts: 0 });
+  begin(1);
+}
+function loadBest() { try { return +(localStorage.getItem('slopeDungeonBest') || 0); } catch (e) { return 0; } }
+function saveBest() {
+  const b = Math.max(loadBest(), S.score);
+  try { localStorage.setItem('slopeDungeonBest', String(b)); } catch (e) {}
+  return b;
+}
+
+/* ---------- Effects + render loop ---------- */
+function burst(tx, ty, color) {
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, s = .03 + Math.random() * .06;
+    particles.push({ x: tx + .5, y: ty + .5, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 40, color });
+  }
+}
+function frame(t) {
+  ctx.fillStyle = '#0b0912'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  P.rx += (P.x - P.rx) * .35; P.ry += (P.y - P.ry) * .35;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!explored[y][x]) continue;
+    const px = x * TILE, py = y * TILE;
+    if (grid[y][x]) ctx.drawImage(WALL, px, py);
+    else {
+      ctx.drawImage(FLOORS[(x * 7 + y * 13) % 4], px, py);
+      if (y > 0 && grid[y - 1][x]) { ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(px, py, TILE, 4); }
+    }
+  }
+  for (const e of ents.values()) {
+    if (!explored[e.y][e.x]) continue;
+    const px = e.x * TILE, py = e.y * TILE;
+    if (e.type === 'slime') {
+      const bob = Math.round(Math.sin(t / 220 + e.x + e.y) + 1);
+      ctx.drawImage(SPR.slime, px, py - bob);
+    } else if (e.type === 'chest') {
+      ctx.drawImage(SPR.chest, px, py);
+      if (Math.floor(t / 140 + e.x * 3) % 10 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(px + 12, py + 2, 2, 2); }
+    } else if (e.type === 'exit') {
+      ctx.globalAlpha = .7 + .3 * Math.sin(t / 300); ctx.drawImage(SPR.portal, px, py); ctx.globalAlpha = 1;
+    }
+  }
+  const ppx = Math.round(P.rx * TILE), ppy = Math.round(P.ry * TILE);
+  ctx.save();
+  if (P.face < 0) { ctx.translate(ppx + TILE, ppy); ctx.scale(-1, 1); ctx.drawImage(SPR.player, 0, 0); }
+  else ctx.drawImage(SPR.player, ppx, ppy);
+  ctx.restore();
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy; p.life--;
+    ctx.fillStyle = p.color; ctx.fillRect(Math.round(p.x * TILE) - 1, Math.round(p.y * TILE) - 1, 3, 3);
+  }
+  const r = radius();
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!explored[y][x]) continue;
+    const d = Math.hypot(x - P.x, y - P.y);
+    const a = d > r + .5 ? .62 : d > r - .5 ? .3 : 0;
+    if (a) { ctx.fillStyle = `rgba(11,9,18,${a})`; ctx.fillRect(x * TILE, y * TILE, TILE, TILE); }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Title ---------- */
+$('titleArt').innerHTML = ['player', 'slime', 'chest', 'portal'].map(k => `<img src="${ICON[k]}" alt="">`).join('');
+$('legend').innerHTML = [
+  ['slime', 'Slimes block the path. Find the slope from the graph to defeat one. A wrong answer costs a heart.'],
+  ['chest', 'Chests hide harder bonus questions. Solve one to win a power-up.'],
+  ['portal', 'The portal takes you to the next level.']
+].map(([k, t]) => `<img src="${ICON[k]}" alt=""><span>${t}</span>`).join('');
+const best = loadBest(); $('bestLine').textContent = best ? `Best score on this device: ${best}` : '';
+$('startBtn').addEventListener('click', () => {
+  $('titleScreen').classList.add('hidden');
+  resetGame();
+});
+startLevel(1); S.busy = true;
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
