@@ -87,6 +87,24 @@ img.pix{image-rendering:pixelated; width:20px; height:20px; display:inline-block
 label.toggle{display:flex; gap:8px; align-items:center; cursor:pointer; margin-top:8px;}
 label.toggle input{width:20px; height:20px; accent-color:var(--accent);}
 .stats{font-size:24px;}
+[hidden]{display:none !important;}
+.vtable{border-collapse:collapse; margin:10px auto; font-size:30px; text-align:center;}
+.vtable th, .vtable td{border:3px solid var(--edge); padding:2px 20px; min-width:3.5ch;}
+.vtable th{background:var(--accent); color:#fff; font-family:"Press Start 2P", ui-monospace, monospace; font-size:13px; padding:8px 20px;}
+.vtable th.d, .vtable td.d{border:none; background:none; font-size:22px; padding:0 6px; min-width:4ch;}
+.vtable td.run{color:var(--good); text-align:right;} .vtable td.rise{color:var(--gold); text-align:left;}
+.pairs{font-size:34px; text-align:center; margin:14px 0 6px;}
+.pairs span{font-size:24px; color:var(--muted);}
+#choiceBox{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+.choice{font-family:"VT323", ui-monospace, monospace; font-size:22px; line-height:1.15; text-align:left; background:var(--bg); color:var(--ink); border:3px solid var(--edge); box-shadow:3px 3px 0 var(--edge); padding:8px 10px; cursor:pointer; border-radius:0;}
+.choice:hover:not(:disabled){background:var(--panel);}
+.choice:focus-visible{outline:3px dashed var(--accent); outline-offset:3px;}
+.choice:disabled{cursor:default;}
+.choice.gone{opacity:.4; text-decoration:line-through;}
+.choice.right{border-color:var(--good); box-shadow:3px 3px 0 var(--good);}
+.choice.right::before{content:"✓ "; color:var(--good); font-weight:bold;}
+.choice.wrong{border-color:var(--bad); box-shadow:3px 3px 0 var(--bad);}
+.choice.wrong::before{content:"✗ "; color:var(--bad); font-weight:bold;}
 @media (prefers-reduced-motion: reduce){ #toast{transition:none;} }
 </style>
 </head>
@@ -122,10 +140,10 @@ label.toggle input{width:20px; height:20px; accent-color:var(--accent);}
   <div class="card">
     <div class="title-art" id="titleArt"></div>
     <h2>Escape the Slope Dungeon</h2>
-    <p>Find your way through three dark mazes to the glowing portal.</p>
+    <p>Find your way through three dark mazes to the glowing portal. Level 1 gives you slope from <b>graphs</b>, level 2 from <b>tables</b>, and level 3 from <b>two points</b>.</p>
     <div class="legend" id="legend"></div>
     <p>Answer like <b>3/4</b>, <b>-2</b>, <b>0</b>, or <b>undefined</b>. Fractions must be in simplest form.</p>
-    <p>Points on the graph aren’t marked. Find spots where the line crosses exact grid corners, or tap <b>Show points</b> if you’re stuck.</p>
+    <p>On level 1, points on the graph aren’t marked. Find spots where the line crosses exact grid corners, or tap <b>Show points</b> if you’re stuck.</p>
     <p class="note" id="bestLine"></p>
     <div class="row"><button class="btn" id="startBtn">Enter the dungeon</button></div>
   </div>
@@ -138,16 +156,17 @@ label.toggle input{width:20px; height:20px; accent-color:var(--accent);}
     <h2 id="qTitle">A slime blocks the path!</h2>
     <p id="qPrompt"></p>
     <canvas id="graph" width="300" height="300" aria-label="Coordinate graph with a line"></canvas>
-    <div id="answerRow">
-      <div class="row">
-        <input id="answer" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="slope" aria-label="Your slope answer">
-        <button class="btn" id="submitBtn">Check</button>
-      </div>
-      <div class="row">
-        <button class="btn alt" id="undefBtn">Undefined</button>
-        <button class="btn alt" id="ptsBtn">Show points</button>
-        <button class="btn alt" id="hintBtn">Hint</button>
-      </div>
+    <div id="tableBox"></div>
+    <div id="pairsBox"></div>
+    <div id="choiceBox" role="group" aria-label="Answer choices"></div>
+    <div class="row" id="answerRow">
+      <input id="answer" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="slope" aria-label="Your slope answer">
+      <button class="btn" id="submitBtn">Check</button>
+    </div>
+    <div class="row" id="toolRow">
+      <button class="btn alt" id="undefBtn">Undefined</button>
+      <button class="btn alt" id="ptsBtn">Show points</button>
+      <button class="btn alt" id="hintBtn">Hint</button>
     </div>
     <div id="feedback" aria-live="polite"></div>
     <div class="row" id="contRow" hidden><button class="btn" id="contBtn">Continue</button></div>
@@ -235,9 +254,9 @@ const WALL = makeWall();
 
 /* ---------- Game state ---------- */
 const LEVELS = [
-  { cells: 7,  slimes: 4, chests: 2, name: 'Positive slopes' },
-  { cells: 9,  slimes: 5, chests: 3, name: 'Positive and negative slopes' },
-  { cells: 11, slimes: 6, chests: 3, name: 'Zero and undefined slopes join in' }
+  { cells: 7,  slimes: 4, chests: 2, kind: 'graph', name: 'Slope from a graph' },
+  { cells: 9,  slimes: 5, chests: 3, kind: 'table', name: 'Slope from a table' },
+  { cells: 11, slimes: 6, chests: 3, kind: 'pairs', name: 'Slope from two points' }
 ];
 const S = { level: 1, hearts: 3, maxHearts: 5, score: 0, levelStartScore: 0, hints: 1, torch: false, mult: 0,
   correct: 0, attempts: 0, busy: true, perp: true };
@@ -373,7 +392,7 @@ function build(p1, p2, xStep, yStep, opts) {
   let ans;
   if (run === 0) ans = { undef: true };
   else ans = { n: rise, d: run };
-  return Object.assign({ p1: [x1, y1], p2: [x2, y2], xStep, yStep, ans }, opts);
+  return Object.assign({ kind: 'graph', p1: [x1, y1], p2: [x2, y2], xStep, yStep, ans }, opts);
 }
 function place(rise, run, xStep, yStep, opts) {
   const lim = 5;
@@ -386,18 +405,18 @@ function place(rise, run, xStep, yStep, opts) {
   return build([0, 0], [run * xStep, rise * yStep], xStep, yStep, opts);
 }
 function makeNormal(level) {
-  const r = Math.random(); let type = 'normal';
-  if (level >= 3) { if (r < .17) type = 'horiz'; else if (r < .34) type = 'vert'; }
-  else if (level === 2 && r < .12) type = 'horiz';
-  let rise, run;
-  if (type === 'horiz') { rise = 0; run = rand(2, 6); }
-  else if (type === 'vert') { run = 0; rise = rand(2, 6); }
-  else { run = rand(1, 5); rise = rand(1, 5); if (level >= 2 && Math.random() < .55) rise = -rise; }
+  const kind = LEVELS[level - 1].kind;
+  if (kind === 'table') return makeTable(false);
+  if (kind === 'pairs') return makePairs();
+  const run = rand(1, 5); let rise = rand(1, 5);
+  if (Math.random() < .4) rise = -rise;
   return place(rise, run, 1, 1, { prompt: 'Find the slope of the line. Look for two places where it crosses exact grid corners.' });
 }
 function makeHard(level) {
+  if (LEVELS[level - 1].kind === 'table') return makeTable(true);
+  if (LEVELS[level - 1].kind === 'pairs') return makeScenario();
   const kind = pick(['scaled', 'sparse']);
-  const sign = () => (level >= 2 || kind !== 'scaled') && Math.random() < .5 ? -1 : 1;
+  const sign = () => Math.random() < .5 ? -1 : 1;
   let rise, run;
   if (kind === 'scaled') {
     const [xs, ys] = pick([[1, 2], [1, 5], [2, 1], [1, 3]]);
@@ -408,6 +427,84 @@ function makeHard(level) {
   do { run = rand(3, 5); rise = rand(1, 5); } while (gcd(rise, run) !== 1 || rise === run);
   return place(sign() * rise, run, 1, 1, {
     prompt: 'This line only crosses grid corners every few squares. Find two of those corners, then find the slope.' });
+}
+// Level 2: ordered pairs in a vertical x/y table. Bonus tables have uneven x-steps.
+function makeTable(hard) {
+  let n, d, gaps;
+  if (hard) {
+    do { d = rand(1, 3); n = rand(1, 5); } while (gcd(n, d) !== 1 || (d === 1 && n === 1));
+    const top = d === 1 ? 3 : 2;
+    do { gaps = [rand(1, top), rand(1, top), rand(1, top)]; } while (gaps[0] === gaps[1] && gaps[1] === gaps[2]);
+    gaps = gaps.map(g => g * d);
+  } else {
+    d = pick([1, 1, 2]);
+    n = Math.random() < .15 ? 0 : rand(1, 6);
+    gaps = [d, d, d];
+  }
+  if (n && Math.random() < .5) n = -n;
+  const rows = [[rand(-4, 2), rand(-6, 6)]];
+  gaps.forEach(g => { const [x, y] = rows[rows.length - 1]; rows.push([x + g, y + g * n / d]); });
+  return { kind: 'table', hard, rows, p1: rows[0], p2: rows[1], ans: { n, d },
+    prompt: hard ? 'Look closely at how the x-values change. Find the slope of the line through these points.'
+                 : 'Find the slope of the line that passes through the points in the table.' };
+}
+// Level 3: two ordered pairs, including zero and undefined slopes.
+function makePairs() {
+  const sgn = () => (Math.random() < .5 ? -1 : 1), r = Math.random();
+  let rise, run;
+  if (r < .12) { run = 0; rise = sgn() * rand(2, 9); }
+  else if (r < .24) { rise = 0; run = sgn() * rand(2, 9); }
+  else { run = sgn() * rand(1, 7); rise = sgn() * rand(1, 9); }
+  let x1, y1;
+  do { x1 = rand(-9, 9); y1 = rand(-9, 9); } while (Math.abs(x1 + run) > 9 || Math.abs(y1 + rise) > 9);
+  const ans = run === 0 ? { undef: true } : { n: (run < 0 ? -rise : rise) || 0, d: Math.abs(run) };
+  return { kind: 'pairs', p1: [x1, y1], p2: [x1 + run, y1 + rise], ans,
+    prompt: 'Find the slope of the line that passes through these two points.' };
+}
+// Level 3 bonus: interpret slope in a real-world situation (multiple choice).
+const unit = (one, many) => a => `${a} ${a === 1 ? one : many}`;
+const SCENES = [
+  { subj: 'The candle', up: 'grows', down: 'burns down', sign: -1, rate: () => rand(2, 4), start: () => rand(24, 34),
+    yq: 'height', xq: 'time', x1: 'hour', xn: 'hours', amt: unit('cm', 'cm'),
+    fact: (x, y, it) => `After ${x} hours, ${it ? 'it' : 'a burning candle'} is ${y} cm tall.` },
+  { subj: 'Jordan’s savings', up: 'grow by', down: 'shrink by', sign: 1, rate: () => 5 * rand(2, 5), start: () => 10 * rand(2, 10),
+    yq: 'savings', xq: 'time', x1: 'week', xn: 'weeks', amt: a => '$' + a,
+    fact: (x, y) => `After ${x} weeks, Jordan has $${y} saved.` },
+  { subj: 'The water in the tank', up: 'rises by', down: 'drains by', sign: -1, rate: () => rand(3, 9), start: () => 10 * rand(10, 20),
+    yq: 'amount of water', xq: 'time', x1: 'minute', xn: 'minutes', amt: unit('gallon', 'gallons'),
+    fact: (x, y, it) => `After ${x} minutes, ${it ? 'it' : 'a draining tank'} holds ${y} gallons.` },
+  { subj: 'The hiker', up: 'climbs', down: 'descends', sign: 1, rate: () => 100 * rand(2, 6), start: () => 100 * rand(10, 30),
+    yq: 'elevation', xq: 'time', x1: 'hour', xn: 'hours', amt: unit('foot', 'feet'),
+    fact: (x, y, it) => it ? `After ${x} hours, the hiker is at ${y} feet.` : `After ${x} hours of hiking up a mountain, a hiker is at ${y} feet.` },
+  { subj: 'The plant', up: 'grows', down: 'shrinks', sign: 1, rate: () => rand(2, 4), start: () => rand(2, 8),
+    yq: 'height', xq: 'time', x1: 'week', xn: 'weeks', amt: unit('cm', 'cm'),
+    fact: (x, y, it) => `After ${x} weeks, ${it ? 'it' : 'a plant'} is ${y} cm tall.` },
+  { subj: 'The phone’s battery', up: 'gains', down: 'loses', sign: -1, rate: () => rand(5, 11), start: () => 100,
+    yq: 'battery level', xq: 'time', x1: 'hour', xn: 'hours', amt: a => a + '%',
+    fact: (x, y, it) => `After ${x} hours of use, ${it ? 'it' : 'a phone’s battery'} is at ${y}%.` },
+  { subj: 'The taxi fare', up: 'goes up by', down: 'goes down by', sign: 1, rate: () => rand(2, 4), start: () => rand(3, 6),
+    yq: 'cost', xq: 'distance', x1: 'mile', xn: 'miles', amt: a => '$' + a,
+    fact: (x, y, it) => `A ${x}-mile ${it ? 'ride' : 'taxi ride'} costs $${y}.` }
+];
+function makeScenario() {
+  const sc = pick(SCENES);
+  let r, t1, t2, v1, v2;
+  do {
+    r = sc.rate(); const b = sc.start(); t1 = rand(2, 4); t2 = t1 + rand(2, 4);
+    v1 = b + sc.sign * r * t1; v2 = b + sc.sign * r * t2;
+  } while (Math.min(v1, v2) <= 0);
+  const say = (verb, a, per) => `${sc.subj} ${verb} ${sc.amt(a)} every ${per}.`;
+  const right = sc.sign > 0 ? sc.up : sc.down, flip = sc.sign > 0 ? sc.down : sc.up;
+  const correct = say(right, r, sc.x1);
+  const wrongs = [
+    say(flip, r, sc.x1),                    // wrong direction
+    say(right, Math.abs(v2 - v1), sc.x1),   // forgot to divide by the change in x
+    say(right, 1, `${r} ${sc.xn}`)          // flipped the fraction (x over y)
+  ];
+  const choices = [correct, ...wrongs].sort(() => Math.random() - .5);
+  return { kind: 'scenario', sc, t: [t1, t2], v: [v1, v2], rate: sc.sign * r, choices, correct: choices.indexOf(correct),
+    ans: { n: sc.sign * r, d: 1 },
+    prompt: `${sc.fact(t1, v1)} ${sc.fact(t2, v2, true)} The change is linear. Which statement describes the slope (rate of change)?` };
 }
 
 function parseAnswer(str) {
@@ -443,21 +540,64 @@ function grade(p, ans) {
   if (gcd(p.n, p.d) !== 1 || (p.isFrac && p.d === 1)) return retry('That’s equal to the slope, but it isn’t in simplest form. Simplify it and try again.');
   return { status: 'right' };
 }
-function answerText(ans) { return ans.undef ? 'undefined' : fracStr(ans.n, ans.d); }
+function answerText(p) {
+  if (p.kind === 'scenario') return `“${p.choices[p.correct]}”`;
+  return (p.ans.undef ? 'undefined' : fracStr(p.ans.n, p.ans.d)) + '.';
+}
 
+const sub = (a, b) => `${fmt(a)} − ${b < 0 ? '(' + fmt(b) + ')' : fmt(b)}`;
 function explanation(p) {
+  if (p.kind === 'scenario') {
+    const { sc } = p, [t1, t2] = p.t, [v1, v2] = p.v, neg = p.rate < 0;
+    return `<p>Change in ${sc.yq} = ${sub(v2, v1)} = ${fmt(v2 - v1)}<br>Change in ${sc.xq} = ${t2} − ${t1} = ${t2 - t1}</p>` +
+      `<p>Slope = ${fmt(v2 - v1)} ÷ ${t2 - t1} = <b>${fmt(p.rate)}</b> per ${sc.x1}. It’s ${neg ? 'negative' : 'positive'}, so the ${sc.yq} is going ${neg ? 'down' : 'up'}.</p>` +
+      `<p>${p.choices[p.correct]}</p>`;
+  }
   const [x1, y1] = p.p1, [x2, y2] = p.p2, rise = y2 - y1, run = x2 - x1;
-  const sub = (a, b) => `${fmt(a)} − ${b < 0 ? '(' + fmt(b) + ')' : fmt(b)}`;
+  const rL = p.kind === 'graph' ? 'Rise' : 'Change in y', nL = p.kind === 'graph' ? 'Run' : 'Change in x';
   let h = `<p>Use the points (${fmt(x1)}, ${fmt(y1)}) and (${fmt(x2)}, ${fmt(y2)}).</p>`;
-  h += `<p><b class="rise">Rise</b> = ${sub(y2, y1)} = ${fmt(rise)}<br><b class="run">Run</b> = ${sub(x2, x1)} = ${fmt(run)}</p>`;
-  if (run === 0) h += `<p>The run is 0, and you can’t divide by 0. A vertical line has an <b>undefined</b> slope.</p>`;
+  h += `<p><b class="rise">${rL}</b> = ${sub(y2, y1)} = ${fmt(rise)}<br><b class="run">${nL}</b> = ${sub(x2, x1)} = ${fmt(run)}</p>`;
+  if (run === 0) h += `<p>The change in x is 0, and you can’t divide by 0. A vertical line has an <b>undefined</b> slope.</p>`;
   else if (rise === 0) h += `<p>Slope = 0 ÷ ${fmt(run)} = <b>0</b>. A horizontal line has a slope of 0.</p>`;
   else {
     const m = fracStr(rise, run);
-    h += `<p>Slope = rise ÷ run = ${fmt(rise)}/${fmt(run)} = <b>${m}</b></p>`;
+    h += `<p>Slope = ${rL.toLowerCase()} ÷ ${nL.toLowerCase()} = ${fmt(rise)}/${fmt(run)} = <b>${m}</b></p>`;
   }
   if (p.scaled) h += `<p class="note">Each box is worth ${p.xStep} on the x-axis and ${p.yStep} on the y-axis, so counting boxes alone gives the wrong answer.</p>`;
+  if (p.kind === 'table' && p.hard) h += `<p class="note">The x-values don’t go up by the same amount each row, so always divide the change in y by the change in x for the same two rows.</p>`;
   return h;
+}
+
+/* ---------- Table, pairs and choice drawing ---------- */
+const signed = v => (v > 0 ? '+' : '') + fmt(v);
+function drawTable(p, diff) {
+  let h = '<table class="vtable" aria-label="Table of x and y values"><thead><tr><th class="d"></th><th>x</th><th>y</th><th class="d"></th></tr></thead><tbody>';
+  p.rows.forEach(([x, y], i) => {
+    const prev = diff && p.rows[i - 1];
+    h += `<tr><td class="d run">${prev ? signed(x - prev[0]) : ''}</td><td>${fmt(x)}</td><td>${fmt(y)}</td>` +
+      `<td class="d rise">${prev ? signed(y - prev[1]) : ''}</td></tr>`;
+  });
+  $('tableBox').innerHTML = h + '</tbody></table>';
+}
+function drawPairs(p, work) {
+  const [x1, y1] = p.p1, [x2, y2] = p.p2;
+  let h = `<div class="pairs">(${fmt(x1)}, ${fmt(y1)}) <span>and</span> (${fmt(x2)}, ${fmt(y2)})</div>`;
+  if (work) h += `<p class="note" style="text-align:center">slope = <span class="rise">(${sub(y2, y1)})</span> ÷ <span class="run">(${sub(x2, x1)})</span></p>`;
+  $('pairsBox').innerHTML = h;
+}
+function drawChoices(p) {
+  const box = $('choiceBox'); box.innerHTML = '';
+  p.choices.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'choice'; b.textContent = c;
+    b.addEventListener('click', () => pickChoice(i));
+    box.appendChild(b);
+  });
+}
+function showWork(p, reveal) {
+  if (p.kind === 'graph') drawGraph(p, reveal);
+  else if (p.kind === 'table') drawTable(p, reveal);
+  else if (p.kind === 'pairs') drawPairs(p, reveal);
 }
 
 /* ---------- Graph drawing ---------- */
@@ -532,17 +672,21 @@ function openQuestion(ent) {
   S.busy = true;
   const chest = ent.type === 'chest';
   const prob = chest ? makeHard(S.level) : makeNormal(S.level);
+  const k = prob.kind;
   Q = { ent, chest, prob, hintUsed: false, ptsUsed: false, done: false };
   $('qTag').textContent = chest ? 'Bonus challenge' : 'Slime';
   $('qTitle').textContent = chest ? 'A locked treasure chest!' : 'A slime blocks the path!';
   $('qPrompt').textContent = prob.prompt + (chest ? ' Get it right to win a power-up. A wrong answer costs no heart, but the chest crumbles.' : '');
-  drawGraph(prob, false);
+  $('graph').hidden = k !== 'graph'; $('tableBox').hidden = k !== 'table';
+  $('pairsBox').hidden = k !== 'pairs'; $('choiceBox').hidden = k !== 'scenario';
+  if (k === 'scenario') drawChoices(prob); else showWork(prob, false);
   $('answer').value = '';
   $('feedback').innerHTML = '';
-  $('answerRow').hidden = false; $('contRow').hidden = true;
+  $('answerRow').hidden = k === 'scenario'; $('toolRow').hidden = false; $('contRow').hidden = true;
+  $('undefBtn').hidden = k === 'scenario'; $('ptsBtn').hidden = k !== 'graph';
   syncHintBtn();
   $('qModal').classList.remove('hidden');
-  setTimeout(() => $('answer').focus(), 30);
+  setTimeout(() => (k === 'scenario' ? $('choiceBox').firstChild : $('answer')).focus(), 30);
 }
 function syncHintBtn() {
   const b = $('hintBtn');
@@ -560,12 +704,25 @@ $('ptsBtn').addEventListener('click', () => {
 $('hintBtn').addEventListener('click', () => {
   if (!Q || Q.done || S.hints <= 0 || Q.hintUsed) return;
   S.hints--; Q.hintUsed = true; updateHUD(); syncHintBtn();
-  drawGraph(Q.prob, true);
-  const p = Q.prob; let tip = 'The dashed lines show the rise (up or down) and the run (left to right). Slope = rise ÷ run.';
-  if (p.scaled) tip += ' Use the numbers on the axes, not the number of boxes.';
-  if (p.ans.undef || (p.p1[0] === p.p2[0])) tip = 'There’s no run here at all. What happens when you divide by 0?';
+  const p = Q.prob; let tip;
+  if (p.kind === 'scenario') {
+    const btns = [...$('choiceBox').children], wrong = btns.filter((b, i) => i !== p.correct);
+    const gone = pick(wrong); gone.classList.add('gone'); gone.disabled = true;
+    tip = `One wrong choice is crossed out. Slope = change in ${p.sc.yq} ÷ change in ${p.sc.xq}. Is the ${p.sc.yq} going up or down?`;
+  } else {
+    showWork(p, true);
+    if (p.kind === 'table') {
+      tip = 'The numbers beside the table show how much x and y change from row to row. Slope = change in y ÷ change in x.';
+      if (p.hard) tip += ' The x-changes aren’t all the same, so use both changes from the same row.';
+    } else if (p.kind === 'pairs') {
+      tip = 'Subtract the y-values and the x-values in the same order. Slope = (y₂ − y₁) ÷ (x₂ − x₁).';
+    } else {
+      tip = 'The dashed lines show the rise (up or down) and the run (left to right). Slope = rise ÷ run.';
+      if (p.scaled) tip += ' Use the numbers on the axes, not the number of boxes.';
+    }
+  }
   $('feedback').innerHTML = `<p class="note">${tip} (Hint used: half points.)</p>`;
-  $('answer').focus();
+  if (p.kind !== 'scenario') $('answer').focus();
 });
 $('undefBtn').addEventListener('click', () => { $('answer').value = 'undefined'; $('answer').focus(); });
 $('answer').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
@@ -579,8 +736,19 @@ function submit() {
   }
   const res = grade(parsed, Q.prob.ans);
   if (res.status === 'retry') { $('feedback').innerHTML = `<p class="bad">${res.msg}</p>`; $('answer').focus(); return; }
+  finish(res.status === 'right');
+}
+function pickChoice(i) {
+  if (!Q || Q.done) return;
+  [...$('choiceBox').children].forEach((b, j) => {
+    b.disabled = true;
+    if (j === Q.prob.correct) b.classList.add('right');
+    else if (j === i) b.classList.add('wrong');
+  });
+  finish(i === Q.prob.correct);
+}
+function finish(ok) {
   Q.done = true; S.attempts++;
-  const ok = res.status === 'right';
   let html = '';
   if (ok) {
     S.correct++;
@@ -589,25 +757,25 @@ function submit() {
     else if (Q.ptsUsed) pts = Math.round(pts * .75);
     if (S.mult > 0) { pts *= 2; S.mult--; }
     S.score += pts;
-    html = `<p class="good"><b>Correct! +${pts} points.</b> The answer is ${answerText(Q.prob.ans)}.</p>`;
+    html = `<p class="good"><b>Correct! +${pts} points.</b> The answer is ${answerText(Q.prob)}</p>`;
     ents.delete(key(Q.ent.x, Q.ent.y));
     burst(Q.ent.x, Q.ent.y, Q.chest ? '#ffcf3f' : '#4fc263');
     if (Q.chest) html += grantPower();
     else html += '<p>The slime melts away.</p>';
   } else {
-    html = `<p class="bad"><b>Not quite.</b> The answer is ${answerText(Q.prob.ans)}.</p>` + explanation(Q.prob);
+    html = `<p class="bad"><b>Not quite.</b> The answer is ${answerText(Q.prob)}</p>` + explanation(Q.prob);
     if (Q.chest) { ents.delete(key(Q.ent.x, Q.ent.y)); burst(Q.ent.x, Q.ent.y, '#9a5a2a'); html += '<p class="note">The chest crumbles to dust.</p>'; }
     else { S.hearts--; html += S.hearts > 0 ? `<p>The slime hits you! You lose a heart. Bump it again for a new problem.</p>` : `<p>The slime hits you, and that was your last heart.</p>`; }
-    drawGraph(Q.prob, true);
+    showWork(Q.prob, true);
   }
   $('feedback').innerHTML = html;
-  $('answerRow').hidden = true; $('contRow').hidden = false;
+  $('answerRow').hidden = true; $('toolRow').hidden = true; $('contRow').hidden = false;
   updateHUD();
   setTimeout(() => $('contBtn').focus(), 30);
 }
 const POWERS = {
   heart: { icon: 'heart', name: 'Extra Heart', desc: 'You gain one heart.', apply: () => { S.hearts++; } },
-  hint:  { icon: 'scroll', name: 'Hint Scrolls', desc: 'Two more hints. A hint draws the rise and run on the graph.', apply: () => { S.hints += 2; } },
+  hint:  { icon: 'scroll', name: 'Hint Scrolls', desc: 'Two more hints. A hint shows the change in x and y, or crosses out a wrong choice.', apply: () => { S.hints += 2; } },
   torch: { icon: 'torch', name: 'Torch', desc: 'You can see much farther for the rest of this level.', apply: () => { S.torch = true; reveal(); } },
   star:  { icon: 'star', name: 'Power Star', desc: 'Double points on your next 3 correct answers.', apply: () => { S.mult += 3; } }
 };
