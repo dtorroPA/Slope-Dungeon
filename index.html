@@ -95,16 +95,7 @@ label.toggle input{width:20px; height:20px; accent-color:var(--accent);}
 .vtable td.run{color:var(--good); text-align:right;} .vtable td.rise{color:var(--gold); text-align:left;}
 .pairs{font-size:34px; text-align:center; margin:14px 0 6px;}
 .pairs span{font-size:24px; color:var(--muted);}
-#choiceBox{display:flex; flex-direction:column; gap:8px; margin-top:10px;}
-.choice{font-family:"VT323", ui-monospace, monospace; font-size:22px; line-height:1.15; text-align:left; background:var(--bg); color:var(--ink); border:3px solid var(--edge); box-shadow:3px 3px 0 var(--edge); padding:8px 10px; cursor:pointer; border-radius:0;}
-.choice:hover:not(:disabled){background:var(--panel);}
-.choice:focus-visible{outline:3px dashed var(--accent); outline-offset:3px;}
-.choice:disabled{cursor:default;}
-.choice.gone{opacity:.4; text-decoration:line-through;}
-.choice.right{border-color:var(--good); box-shadow:3px 3px 0 var(--good);}
-.choice.right::before{content:"✓ "; color:var(--good); font-weight:bold;}
-.choice.wrong{border-color:var(--bad); box-shadow:3px 3px 0 var(--bad);}
-.choice.wrong::before{content:"✗ "; color:var(--bad); font-weight:bold;}
+.story{font-size:28px; line-height:1.25; text-align:center; margin:12px 0; padding:10px 12px; border:3px dashed var(--accent);}
 @media (prefers-reduced-motion: reduce){ #toast{transition:none;} }
 </style>
 </head>
@@ -154,11 +145,11 @@ label.toggle input{width:20px; height:20px; accent-color:var(--accent);}
   <div class="card">
     <span class="tag" id="qTag">Slime</span>
     <h2 id="qTitle">A slime blocks the path!</h2>
+    <div id="storyBox"></div>
     <p id="qPrompt"></p>
     <canvas id="graph" width="300" height="300" aria-label="Coordinate graph with a line"></canvas>
     <div id="tableBox"></div>
     <div id="pairsBox"></div>
-    <div id="choiceBox" role="group" aria-label="Answer choices"></div>
     <div class="row" id="answerRow">
       <input id="answer" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="slope" aria-label="Your slope answer">
       <button class="btn" id="submitBtn">Check</button>
@@ -461,50 +452,57 @@ function makePairs() {
   return { kind: 'pairs', p1: [x1, y1], p2: [x1 + run, y1 + rise], ans,
     prompt: 'Find the slope of the line that passes through these two points.' };
 }
-// Level 3 bonus: interpret slope in a real-world situation (multiple choice).
-const unit = (one, many) => a => `${a} ${a === 1 ? one : many}`;
+// Level 3 bonus: read a real-world rate and write it as a slope.
 const SCENES = [
-  { subj: 'The candle', up: 'grows', down: 'burns down', sign: -1, rate: () => rand(2, 4), start: () => rand(24, 34),
-    yq: 'height', xq: 'time', x1: 'hour', xn: 'hours', amt: unit('cm', 'cm'),
-    fact: (x, y, it) => `After ${x} hours, ${it ? 'it' : 'a burning candle'} is ${y} cm tall.` },
-  { subj: 'Jordan’s savings', up: 'grow by', down: 'shrink by', sign: 1, rate: () => 5 * rand(2, 5), start: () => 10 * rand(2, 10),
-    yq: 'savings', xq: 'time', x1: 'week', xn: 'weeks', amt: a => '$' + a,
-    fact: (x, y) => `After ${x} weeks, Jordan has $${y} saved.` },
-  { subj: 'The water in the tank', up: 'rises by', down: 'drains by', sign: -1, rate: () => rand(3, 9), start: () => 10 * rand(10, 20),
-    yq: 'amount of water', xq: 'time', x1: 'minute', xn: 'minutes', amt: unit('gallon', 'gallons'),
-    fact: (x, y, it) => `After ${x} minutes, ${it ? 'it' : 'a draining tank'} holds ${y} gallons.` },
-  { subj: 'The hiker', up: 'climbs', down: 'descends', sign: 1, rate: () => 100 * rand(2, 6), start: () => 100 * rand(10, 30),
-    yq: 'elevation', xq: 'time', x1: 'hour', xn: 'hours', amt: unit('foot', 'feet'),
-    fact: (x, y, it) => it ? `After ${x} hours, the hiker is at ${y} feet.` : `After ${x} hours of hiking up a mountain, a hiker is at ${y} feet.` },
-  { subj: 'The plant', up: 'grows', down: 'shrinks', sign: 1, rate: () => rand(2, 4), start: () => rand(2, 8),
-    yq: 'height', xq: 'time', x1: 'week', xn: 'weeks', amt: unit('cm', 'cm'),
-    fact: (x, y, it) => `After ${x} weeks, ${it ? 'it' : 'a plant'} is ${y} cm tall.` },
-  { subj: 'The phone’s battery', up: 'gains', down: 'loses', sign: -1, rate: () => rand(5, 11), start: () => 100,
-    yq: 'battery level', xq: 'time', x1: 'hour', xn: 'hours', amt: a => a + '%',
-    fact: (x, y, it) => `After ${x} hours of use, ${it ? 'it' : 'a phone’s battery'} is at ${y}%.` },
-  { subj: 'The taxi fare', up: 'goes up by', down: 'goes down by', sign: 1, rate: () => rand(2, 4), start: () => rand(3, 6),
-    yq: 'cost', xq: 'distance', x1: 'mile', xn: 'miles', amt: a => '$' + a,
-    fact: (x, y, it) => `A ${x}-mile ${it ? 'ride' : 'taxi ride'} costs $${y}.` }
+  { sign: -1, yq: 'the diver’s elevation', yin: 'feet', xq: 'time', xu: ['minute', 'minutes'], yu: ['foot', 'feet'], g: [1, 2, 5],
+    say: (A, P) => `A diver descends ${A} every ${P}.` },
+  { sign: 1, yq: 'the balloon’s height', yin: 'feet', xq: 'time', xu: ['second', 'seconds'], yu: ['foot', 'feet'], g: [1, 2, 5, 10],
+    say: (A, P) => `A hot air balloon rises ${A} every ${P}.` },
+  { sign: -1, yq: 'the candle’s height', yin: 'centimeters', xq: 'time', xu: ['hour', 'hours'], yu: ['centimeter', 'centimeters'], g: [1, 2],
+    say: (A, P) => `A candle burns down ${A} every ${P}.` },
+  { sign: 1, yq: 'Jordan’s savings', yin: 'dollars', xq: 'time', xu: ['week', 'weeks'], money: true, aMult: 5, g: [1],
+    say: (A, P) => `Jordan saves ${A} every ${P}.` },
+  { sign: -1, yq: 'the water in the tank', yin: 'gallons', xq: 'time', xu: ['minute', 'minutes'], yu: ['gallon', 'gallons'], g: [1, 2, 5],
+    say: (A, P) => `A tank drains ${A} of water every ${P}.` },
+  { sign: 1, yq: 'the plant’s height', yin: 'inches', xq: 'time', xu: ['week', 'weeks'], yu: ['inch', 'inches'], g: [1, 2],
+    say: (A, P) => `A plant grows ${A} every ${P}.` },
+  { sign: -1, yq: 'the battery level', yin: 'percent', xq: 'time', xu: ['hour', 'hours'], pct: true, aMult: 5, g: [1],
+    say: (A, P) => `A phone’s battery loses ${A} of its charge every ${P}.` },
+  { sign: -1, yq: 'the temperature', yin: 'degrees', xq: 'time', xu: ['hour', 'hours'], yu: ['degree', 'degrees'], g: [1, 2],
+    say: (A, P) => `After sunset, the temperature drops ${A} every ${P}.` },
+  { sign: 1, yq: 'the taxi fare', yin: 'dollars', xq: 'distance', xu: ['mile', 'miles'], money: true, g: [1],
+    say: (A, P) => `A taxi fare goes up ${A} for every ${P} driven.` },
+  { sign: 1, yq: 'the snow depth', yin: 'inches', xq: 'time', xu: ['hour', 'hours'], yu: ['inch', 'inches'], g: [1, 2],
+    say: (A, P) => `During a storm, snow piles up ${A} every ${P}.` },
+  { sign: -1, yq: 'the gas in the tank', yin: 'gallons', xq: 'distance', xu: ['mile', 'miles'], yu: ['gallon', 'gallons'],
+    nums: () => [1, rand(20, 35)], say: (A, P) => `A car uses ${A} of gas every ${P} driven.` }
+];
+const ZERO_SCENES = [
+  { yq: 'the room’s temperature', yin: 'degrees', xq: 'time', xu: ['hour', 'hours'],
+    story: 'A thermostat keeps a room at exactly 70 degrees all day.' },
+  { yq: 'the car’s distance from home', yin: 'miles', xq: 'time', xu: ['minute', 'minutes'],
+    story: 'A car sits parked in a lot 12 miles from home all afternoon.' }
 ];
 function makeScenario() {
+  if (Math.random() < .1) {
+    const sc = pick(ZERO_SCENES);
+    return { kind: 'scenario', sc, a: 0, per: 1, story: () => sc.story, ans: { n: 0, d: 1 },
+      prompt: `Let x be the ${sc.xq} in ${sc.xu[1]} and y be ${sc.yq} in ${sc.yin}. What is the slope?` };
+  }
   const sc = pick(SCENES);
-  let r, t1, t2, v1, v2;
-  do {
-    r = sc.rate(); const b = sc.start(); t1 = rand(2, 4); t2 = t1 + rand(2, 4);
-    v1 = b + sc.sign * r * t1; v2 = b + sc.sign * r * t2;
-  } while (Math.min(v1, v2) <= 0);
-  const say = (verb, a, per) => `${sc.subj} ${verb} ${sc.amt(a)} every ${per}.`;
-  const right = sc.sign > 0 ? sc.up : sc.down, flip = sc.sign > 0 ? sc.down : sc.up;
-  const correct = say(right, r, sc.x1);
-  const wrongs = [
-    say(flip, r, sc.x1),                    // wrong direction
-    say(right, Math.abs(v2 - v1), sc.x1),   // forgot to divide by the change in x
-    say(right, 1, `${r} ${sc.xn}`)          // flipped the fraction (x over y)
-  ];
-  const choices = [correct, ...wrongs].sort(() => Math.random() - .5);
-  return { kind: 'scenario', sc, t: [t1, t2], v: [v1, v2], rate: sc.sign * r, choices, correct: choices.indexOf(correct),
-    ans: { n: sc.sign * r, d: 1 },
-    prompt: `${sc.fact(t1, v1)} ${sc.fact(t2, v2, true)} The change is linear. Which statement describes the slope (rate of change)?` };
+  let a, per;
+  if (sc.nums) [a, per] = sc.nums();
+  else {
+    let n, d;
+    do { n = rand(1, 6); d = rand(1, 6); } while (gcd(n, d) !== 1 || (n === 1 && d === 1));
+    const g = pick(sc.g);
+    a = n * g * (sc.aMult || 1); per = d * g;
+  }
+  const amt = sc.money ? '$' + a : sc.pct ? a + '%' : `${a} ${a === 1 ? sc.yu[0] : sc.yu[1]}`;
+  const time = per === 1 ? sc.xu[0] : `${per} ${sc.xu[1]}`;
+  const story = hl => sc.say(hl ? `<b class="rise">${amt}</b>` : amt, hl ? `<b class="run">${time}</b>` : time);
+  return { kind: 'scenario', sc, a, per, story, ans: { n: sc.sign * a, d: per },
+    prompt: `Let x be the ${sc.xq} in ${sc.xu[1]} and y be ${sc.yq} in ${sc.yin}. What is the slope?` };
 }
 
 function parseAnswer(str) {
@@ -541,17 +539,19 @@ function grade(p, ans) {
   return { status: 'right' };
 }
 function answerText(p) {
-  if (p.kind === 'scenario') return `“${p.choices[p.correct]}”`;
   return (p.ans.undef ? 'undefined' : fracStr(p.ans.n, p.ans.d)) + '.';
 }
 
 const sub = (a, b) => `${fmt(a)} − ${b < 0 ? '(' + fmt(b) + ')' : fmt(b)}`;
 function explanation(p) {
   if (p.kind === 'scenario') {
-    const { sc } = p, [t1, t2] = p.t, [v1, v2] = p.v, neg = p.rate < 0;
-    return `<p>Change in ${sc.yq} = ${sub(v2, v1)} = ${fmt(v2 - v1)}<br>Change in ${sc.xq} = ${t2} − ${t1} = ${t2 - t1}</p>` +
-      `<p>Slope = ${fmt(v2 - v1)} ÷ ${t2 - t1} = <b>${fmt(p.rate)}</b> per ${sc.x1}. It’s ${neg ? 'negative' : 'positive'}, so the ${sc.yq} is going ${neg ? 'down' : 'up'}.</p>` +
-      `<p>${p.choices[p.correct]}</p>`;
+    const { sc } = p;
+    if (!p.a) return `<p>${sc.yq[0].toUpperCase() + sc.yq.slice(1)} never changes, so the change in y is 0. Slope = 0 ÷ (any change in x) = <b>0</b>.</p>`;
+    const neg = p.ans.n < 0;
+    return `<p><b class="rise">Change in y</b> = ${fmt(p.ans.n)} (${sc.yq} goes ${neg ? 'down' : 'up'} ${p.a} ${sc.yin})<br>` +
+      `<b class="run">Change in x</b> = ${p.per} (${p.per === 1 ? sc.xu[0] : p.per + ' ' + sc.xu[1]})</p>` +
+      `<p>Slope = ${fmt(p.ans.n)}/${p.per} = <b>${fracStr(p.ans.n, p.per)}</b></p>` +
+      (neg ? `<p class="note">Going down means the slope is negative.</p>` : '');
   }
   const [x1, y1] = p.p1, [x2, y2] = p.p2, rise = y2 - y1, run = x2 - x1;
   const rL = p.kind === 'graph' ? 'Rise' : 'Change in y', nL = p.kind === 'graph' ? 'Run' : 'Change in x';
@@ -568,7 +568,7 @@ function explanation(p) {
   return h;
 }
 
-/* ---------- Table, pairs and choice drawing ---------- */
+/* ---------- Table, pairs and story drawing ---------- */
 const signed = v => (v > 0 ? '+' : '') + fmt(v);
 function drawTable(p, diff) {
   let h = '<table class="vtable" aria-label="Table of x and y values"><thead><tr><th class="d"></th><th>x</th><th>y</th><th class="d"></th></tr></thead><tbody>';
@@ -585,19 +585,12 @@ function drawPairs(p, work) {
   if (work) h += `<p class="note" style="text-align:center">slope = <span class="rise">(${sub(y2, y1)})</span> ÷ <span class="run">(${sub(x2, x1)})</span></p>`;
   $('pairsBox').innerHTML = h;
 }
-function drawChoices(p) {
-  const box = $('choiceBox'); box.innerHTML = '';
-  p.choices.forEach((c, i) => {
-    const b = document.createElement('button');
-    b.className = 'choice'; b.textContent = c;
-    b.addEventListener('click', () => pickChoice(i));
-    box.appendChild(b);
-  });
-}
+function drawStory(p, hl) { $('storyBox').innerHTML = `<div class="story">${p.story(hl)}</div>`; }
 function showWork(p, reveal) {
   if (p.kind === 'graph') drawGraph(p, reveal);
   else if (p.kind === 'table') drawTable(p, reveal);
   else if (p.kind === 'pairs') drawPairs(p, reveal);
+  else drawStory(p, reveal);
 }
 
 /* ---------- Graph drawing ---------- */
@@ -678,15 +671,15 @@ function openQuestion(ent) {
   $('qTitle').textContent = chest ? 'A locked treasure chest!' : 'A slime blocks the path!';
   $('qPrompt').textContent = prob.prompt + (chest ? ' Get it right to win a power-up. A wrong answer costs no heart, but the chest crumbles.' : '');
   $('graph').hidden = k !== 'graph'; $('tableBox').hidden = k !== 'table';
-  $('pairsBox').hidden = k !== 'pairs'; $('choiceBox').hidden = k !== 'scenario';
-  if (k === 'scenario') drawChoices(prob); else showWork(prob, false);
+  $('pairsBox').hidden = k !== 'pairs'; $('storyBox').hidden = k !== 'scenario';
+  showWork(prob, false);
   $('answer').value = '';
   $('feedback').innerHTML = '';
-  $('answerRow').hidden = k === 'scenario'; $('toolRow').hidden = false; $('contRow').hidden = true;
-  $('undefBtn').hidden = k === 'scenario'; $('ptsBtn').hidden = k !== 'graph';
+  $('answerRow').hidden = false; $('toolRow').hidden = false; $('contRow').hidden = true;
+  $('ptsBtn').hidden = k !== 'graph';
   syncHintBtn();
   $('qModal').classList.remove('hidden');
-  setTimeout(() => (k === 'scenario' ? $('choiceBox').firstChild : $('answer')).focus(), 30);
+  setTimeout(() => $('answer').focus(), 30);
 }
 function syncHintBtn() {
   const b = $('hintBtn');
@@ -705,24 +698,21 @@ $('hintBtn').addEventListener('click', () => {
   if (!Q || Q.done || S.hints <= 0 || Q.hintUsed) return;
   S.hints--; Q.hintUsed = true; updateHUD(); syncHintBtn();
   const p = Q.prob; let tip;
+  showWork(p, true);
   if (p.kind === 'scenario') {
-    const btns = [...$('choiceBox').children], wrong = btns.filter((b, i) => i !== p.correct);
-    const gone = pick(wrong); gone.classList.add('gone'); gone.disabled = true;
-    tip = `One wrong choice is crossed out. Slope = change in ${p.sc.yq} ÷ change in ${p.sc.xq}. Is the ${p.sc.yq} going up or down?`;
+    tip = p.a ? 'Slope = change in y ÷ change in x. The gold amount is the change in y and the green amount is the change in x. Is y going up or down?'
+              : 'Does y change at all? Slope = change in y ÷ change in x.';
+  } else if (p.kind === 'table') {
+    tip = 'The numbers beside the table show how much x and y change from row to row. Slope = change in y ÷ change in x.';
+    if (p.hard) tip += ' The x-changes aren’t all the same, so use both changes from the same row.';
+  } else if (p.kind === 'pairs') {
+    tip = 'Subtract the y-values and the x-values in the same order. Slope = (y₂ − y₁) ÷ (x₂ − x₁).';
   } else {
-    showWork(p, true);
-    if (p.kind === 'table') {
-      tip = 'The numbers beside the table show how much x and y change from row to row. Slope = change in y ÷ change in x.';
-      if (p.hard) tip += ' The x-changes aren’t all the same, so use both changes from the same row.';
-    } else if (p.kind === 'pairs') {
-      tip = 'Subtract the y-values and the x-values in the same order. Slope = (y₂ − y₁) ÷ (x₂ − x₁).';
-    } else {
-      tip = 'The dashed lines show the rise (up or down) and the run (left to right). Slope = rise ÷ run.';
-      if (p.scaled) tip += ' Use the numbers on the axes, not the number of boxes.';
-    }
+    tip = 'The dashed lines show the rise (up or down) and the run (left to right). Slope = rise ÷ run.';
+    if (p.scaled) tip += ' Use the numbers on the axes, not the number of boxes.';
   }
   $('feedback').innerHTML = `<p class="note">${tip} (Hint used: half points.)</p>`;
-  if (p.kind !== 'scenario') $('answer').focus();
+  $('answer').focus();
 });
 $('undefBtn').addEventListener('click', () => { $('answer').value = 'undefined'; $('answer').focus(); });
 $('answer').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
@@ -737,15 +727,6 @@ function submit() {
   const res = grade(parsed, Q.prob.ans);
   if (res.status === 'retry') { $('feedback').innerHTML = `<p class="bad">${res.msg}</p>`; $('answer').focus(); return; }
   finish(res.status === 'right');
-}
-function pickChoice(i) {
-  if (!Q || Q.done) return;
-  [...$('choiceBox').children].forEach((b, j) => {
-    b.disabled = true;
-    if (j === Q.prob.correct) b.classList.add('right');
-    else if (j === i) b.classList.add('wrong');
-  });
-  finish(i === Q.prob.correct);
 }
 function finish(ok) {
   Q.done = true; S.attempts++;
@@ -775,7 +756,7 @@ function finish(ok) {
 }
 const POWERS = {
   heart: { icon: 'heart', name: 'Extra Heart', desc: 'You gain one heart.', apply: () => { S.hearts++; } },
-  hint:  { icon: 'scroll', name: 'Hint Scrolls', desc: 'Two more hints. A hint shows the change in x and y, or crosses out a wrong choice.', apply: () => { S.hints += 2; } },
+  hint:  { icon: 'scroll', name: 'Hint Scrolls', desc: 'Two more hints. A hint shows the change in x and the change in y.', apply: () => { S.hints += 2; } },
   torch: { icon: 'torch', name: 'Torch', desc: 'You can see much farther for the rest of this level.', apply: () => { S.torch = true; reveal(); } },
   star:  { icon: 'star', name: 'Power Star', desc: 'Double points on your next 3 correct answers.', apply: () => { S.mult += 3; } }
 };
